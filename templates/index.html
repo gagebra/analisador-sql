@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Analisador SQL — Linguagens Formais e Autômatos</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --border: #1e2230;
+    --border-bright: #2a3048;
+    --accent: #4f8ef7;
+    --accent2: #7c3aed;
+    --green: #22d3a0;
+    --red: #f43f5e;
+    --yellow: #fbbf24;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --token-kw: #c084fc;
+    --token-id: #4f8ef7;
+    --token-num: #22d3a0;
+    --token-str: #fbbf24;
+    --token-op: #fb7185;
+    --token-punct: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid de fundo ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(79,142,247,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,142,247,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 24px 60px; }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 36px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .logo h1 { font-size: 1.25rem; font-weight: 800; letter-spacing: -.02em; }
+  .logo p { font-size: .75rem; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem;
+    padding: 4px 10px;
+    border: 1px solid var(--border-bright);
+    border-radius: 100px;
+    color: var(--muted);
+  }
+
+  /* ── Editor ── */
+  .editor-area { margin-bottom: 20px; }
+  .editor-label {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .editor-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .editor-box:focus-within { border-color: var(--accent); }
+  .editor-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,.02);
+  }
+  .editor-dots { display: flex; gap: 6px; }
+  .editor-dots span {
+    width: 11px; height: 11px; border-radius: 50%;
+  }
+  .editor-dots span:nth-child(1) { background: #f43f5e44; border: 1px solid #f43f5e66; }
+  .editor-dots span:nth-child(2) { background: #fbbf2444; border: 1px solid #fbbf2466; }
+  .editor-dots span:nth-child(3) { background: #22d3a044; border: 1px solid #22d3a066; }
+  .editor-filename { font-family: 'JetBrains Mono', monospace; font-size: .72rem; color: var(--muted); }
+
+  textarea {
+    width: 100%; min-height: 120px;
+    background: transparent; border: none; outline: none; resize: vertical;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .9rem; line-height: 1.7;
+    color: var(--text);
+    padding: 18px 20px;
+    tab-size: 4;
+  }
+  textarea::placeholder { color: var(--muted); }
+
+  /* ── Exemplos ── */
+  .examples {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 20px;
+  }
+  .examples-label {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+    width: 100%; margin-bottom: 2px;
+  }
+  .ex-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem;
+    padding: 6px 12px;
+    border: 1px solid var(--border-bright);
+    border-radius: 6px;
+    background: transparent; color: var(--muted);
+    cursor: pointer; transition: all .15s;
+    white-space: nowrap;
+  }
+  .ex-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,.06); }
+
+  /* ── Botões de ação ── */
+  .actions { display: flex; gap: 12px; margin-bottom: 36px; }
+  .btn-analyze {
+    flex: 1;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; border-radius: 10px;
+    color: #fff; font-family: 'Syne', sans-serif;
+    font-size: .95rem; font-weight: 700;
+    cursor: pointer; transition: opacity .15s, transform .1s;
+    letter-spacing: .01em;
+  }
+  .btn-analyze:hover { opacity: .9; }
+  .btn-analyze:active { transform: scale(.98); }
+  .btn-analyze:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-clear {
+    padding: 14px 20px;
+    border: 1px solid var(--border-bright);
+    border-radius: 10px;
+    background: transparent; color: var(--muted);
+    font-family: 'Syne', sans-serif; font-size: .9rem; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+  }
+  .btn-clear:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── Status ── */
+  .status-bar {
+    display: none;
+    align-items: center; gap: 10px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 24px;
+    font-size: .88rem; font-weight: 600;
+    border: 1px solid;
+  }
+  .status-bar.success {
+    display: flex;
+    background: rgba(34,211,160,.06);
+    border-color: rgba(34,211,160,.3);
+    color: var(--green);
+  }
+  .status-bar.error {
+    display: flex;
+    background: rgba(244,63,94,.06);
+    border-color: rgba(244,63,94,.3);
+    color: var(--red);
+  }
+  .status-icon { font-size: 1.1rem; }
+
+  /* ── Grid de resultados ── */
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .results-grid.full { grid-template-columns: 1fr; }
+
+  @media (max-width: 900px) { .results-grid { grid-template-columns: 1fr; } }
+
+  /* ── Painéis ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,.02);
+  }
+  .panel-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: .8rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text);
+  }
+  .panel-title .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+  }
+  .panel-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem; color: var(--muted);
+  }
+  .panel-body { padding: 16px 18px; max-height: 420px; overflow-y: auto; }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 4px; }
+
+  /* ── Tokens ── */
+  .tokens-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .token-chip {
+    display: flex; align-items: center; gap: 0;
+    border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border-bright);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem;
+  }
+  .token-type {
+    padding: 3px 7px;
+    background: rgba(255,255,255,.04);
+    color: var(--muted);
+    font-size: .65rem; letter-spacing: .05em;
+    border-right: 1px solid var(--border-bright);
+  }
+  .token-value { padding: 3px 8px; font-weight: 600; }
+  .token-chip.kw .token-value  { color: var(--token-kw); }
+  .token-chip.id .token-value  { color: var(--token-id); }
+  .token-chip.num .token-value { color: var(--token-num); }
+  .token-chip.str .token-value { color: var(--token-str); }
+  .token-chip.op .token-value  { color: var(--token-op); }
+  .token-chip.pun .token-value { color: var(--token-punct); }
+
+  /* ── AST ── */
+  .ast-tree { font-family: 'JetBrains Mono', monospace; font-size: .78rem; line-height: 1.8; }
+  .ast-node { cursor: pointer; }
+  .ast-node-line {
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 4px; border-radius: 4px;
+    transition: background .1s;
+  }
+  .ast-node-line:hover { background: rgba(255,255,255,.04); }
+  .ast-toggle { color: var(--muted); width: 14px; text-align: center; }
+  .ast-type { color: var(--accent); font-weight: 600; }
+  .ast-value { color: var(--yellow); }
+  .ast-children { padding-left: 20px; border-left: 1px solid var(--border); margin-left: 6px; }
+  .ast-children.collapsed { display: none; }
+
+  /* ── Derivação ── */
+  .derivation-list { list-style: none; }
+  .derivation-list li {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .74rem; line-height: 1.5;
+  }
+  .derivation-list li:last-child { border-bottom: none; }
+  .deriv-idx {
+    min-width: 26px; text-align: right;
+    color: var(--muted); font-size: .65rem;
+    padding-top: 1px;
+  }
+  .deriv-rule { color: var(--text); }
+  .deriv-rule .nt { color: var(--accent); }
+  .deriv-rule .arr { color: var(--muted); }
+  .deriv-rule .term { color: var(--green); }
+
+  /* ── Trace AFD ── */
+  .trace-table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: .72rem; }
+  .trace-table th {
+    text-align: left; padding: 6px 10px;
+    color: var(--muted); font-size: .65rem; letter-spacing: .08em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--surface);
+  }
+  .trace-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(255,255,255,.03);
+  }
+  .trace-table tr:hover td { background: rgba(255,255,255,.02); }
+  .trace-state { color: var(--accent2); }
+  .trace-next.accept { color: var(--green); font-weight: 700; }
+  .trace-next.error { color: var(--red); }
+  .trace-char { color: var(--yellow); }
+  .trace-class { color: var(--muted); }
+
+  /* ── Empty state ── */
+  .empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 48px 24px;
+    color: var(--muted); text-align: center;
+  }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: .4; }
+  .empty p { font-size: .85rem; line-height: 1.6; }
+
+  /* ── Spinner ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    display: none;
+  }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 10px 18px;
+    font-size: .78rem; font-weight: 600;
+    cursor: pointer; color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⚙</div>
+      <div>
+        <h1>SQL Analyzer</h1>
+        <p>AFD (Léxico) + PDA/GLC (Sintático)</p>
+      </div>
+    </div>
+    <span class="badge">Linguagens Formais e Autômatos</span>
+  </header>
+
+  <!-- Editor -->
+  <div class="editor-area">
+    <div class="editor-label">Query SQL</div>
+    <div class="editor-box">
+      <div class="editor-topbar">
+        <div class="editor-dots"><span></span><span></span><span></span></div>
+        <span class="editor-filename">query.sql</span>
+        <span></span>
+      </div>
+      <textarea id="sqlInput" placeholder="Digite uma query SQL aqui...
+Ex: SELECT * FROM usuarios WHERE idade > 18;"></textarea>
+    </div>
+  </div>
+
+  <!-- Exemplos -->
+  <div class="examples">
+    <div class="examples-label">Exemplos</div>
+    <button class="ex-btn" onclick="setExample('SELECT * FROM usuarios;')">SELECT *</button>
+    <button class="ex-btn" onclick="setExample('SELECT id, nome, email FROM clientes WHERE idade > 18 AND cidade = \'São Paulo\';')">SELECT + WHERE</button>
+    <button class="ex-btn" onclick="setExample('SELECT u.nome, p.titulo FROM usuarios u INNER JOIN posts p ON u.id = p.usuario_id WHERE p.ativo = 1 ORDER BY p.data DESC LIMIT 10;')">JOIN + ORDER</button>
+    <button class="ex-btn" onclick="setExample('INSERT INTO produtos (nome, preco, estoque) VALUES (\'Notebook\', 2999.90, 50);')">INSERT</button>
+    <button class="ex-btn" onclick="setExample('UPDATE clientes SET email = \'novo@email.com\', ativo = 1 WHERE id = 42;')">UPDATE</button>
+    <button class="ex-btn" onclick="setExample('DELETE FROM sessoes WHERE expira_em < 1716000000;')">DELETE</button>
+    <button class="ex-btn" onclick="setExample('CREATE TABLE pedidos (id INT PRIMARY KEY, cliente_id INT NOT NULL, total FLOAT DEFAULT 0.0, criado_em DATE);')">CREATE TABLE</button>
+    <button class="ex-btn" onclick="setExample('SELECT departamento, COUNT(*) AS total FROM funcionarios GROUP BY departamento HAVING COUNT(*) > 5 ORDER BY total DESC;')">GROUP BY + HAVING</button>
+    <button class="ex-btn" onclick="setExample('SELECT * FROM vendas WHERE valor BETWEEN 100 AND 500;')">BETWEEN</button>
+    <button class="ex-btn" onclick="setExample('SELCT * FROM tabela;')">❌ Erro léxico</button>
+    <button class="ex-btn" onclick="setExample('SELECT FROM usuarios;')">❌ Erro sintático</button>
+  </div>
+
+  <!-- Ações -->
+  <div class="actions">
+    <button class="btn-analyze" id="btnAnalyze" onclick="analyze()">
+      <span id="btnText">▶ Analisar Query</span>
+      <span class="spinner" id="spinner"></span>
+    </button>
+    <button class="btn-clear" onclick="clearAll()">Limpar</button>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar" id="statusBar">
+    <span class="status-icon" id="statusIcon"></span>
+    <span id="statusMsg"></span>
+  </div>
+
+  <!-- Resultados -->
+  <div id="resultsArea" style="display:none">
+    <div class="results-grid" id="resultsGrid">
+
+      <!-- Tokens -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="dot" style="background:var(--accent)"></span>
+            Tokens — AFD
+          </div>
+          <span class="panel-count" id="tokenCount"></span>
+        </div>
+        <div class="panel-body" id="tokensPanel"></div>
+      </div>
+
+      <!-- AST + Derivação (tabs) -->
+      <div class="panel">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab(this,'tabAst')">Árvore Sintática</div>
+          <div class="tab" onclick="switchTab(this,'tabDeriv')">Derivação GLC</div>
+          <div class="tab" onclick="switchTab(this,'tabTrace')">Trace AFD</div>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <div class="tab-pane active" id="tabAst" style="padding:16px 18px"></div>
+          <div class="tab-pane" id="tabDeriv" style="padding:16px 18px"></div>
+          <div class="tab-pane" id="tabTrace" style="padding:0"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Utilitários ────────────────────────────────────────────────────────
+
+function setExample(sql) {
+  document.getElementById('sqlInput').value = sql;
+}
+
+function clearAll() {
+  document.getElementById('sqlInput').value = '';
+  document.getElementById('statusBar').className = 'status-bar';
+  document.getElementById('resultsArea').style.display = 'none';
+}
+
+function switchTab(el, pane) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(pane).classList.add('active');
+}
+
+// ── Categorias de token para estilo ──────────────────────────────────
+
+const KEYWORDS_SET = new Set([
+  'SELECT','FROM','WHERE','AND','OR','NOT','INSERT','INTO','VALUES',
+  'UPDATE','SET','DELETE','CREATE','TABLE','DROP','JOIN','INNER',
+  'LEFT','RIGHT','ON','ORDER','BY','GROUP','HAVING','LIMIT','OFFSET',
+  'AS','DISTINCT','ALL','NULL','IS','IN','LIKE','BETWEEN','ASC','DESC',
+  'INT','VARCHAR','TEXT','FLOAT','BOOLEAN','DATE','PRIMARY','KEY',
+  'FOREIGN','REFERENCES','UNIQUE','DEFAULT'
+]);
+
+const PUNCT_SET = new Set(['COMMA','SEMICOLON','LPAREN','RPAREN','DOT']);
+const OP_SET    = new Set(['EQ','NEQ','LT','GT','LTE','GTE','PLUS','MINUS','SLASH','STAR']);
+
+function tokenClass(type) {
+  if (KEYWORDS_SET.has(type)) return 'kw';
+  if (type === 'IDENTIFIER')  return 'id';
+  if (type === 'NUMBER')      return 'num';
+  if (type === 'STRING')      return 'str';
+  if (OP_SET.has(type))       return 'op';
+  if (PUNCT_SET.has(type))    return 'pun';
+  return '';
+}
+
+// ── Renderização de tokens ────────────────────────────────────────────
+
+function renderTokens(tokens) {
+  const panel = document.getElementById('tokensPanel');
+  document.getElementById('tokenCount').textContent = `${tokens.length} tokens`;
+
+  if (!tokens.length) {
+    panel.innerHTML = '<div class="empty"><div class="empty-icon">∅</div><p>Nenhum token.</p></div>';
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'tokens-grid';
+  tokens.forEach(tok => {
+    const cls = tokenClass(tok.type);
+    grid.innerHTML += `
+      <div class="token-chip ${cls}" title="pos=${tok.position}">
+        <span class="token-type">${tok.type}</span>
+        <span class="token-value">${escHtml(tok.value)}</span>
+      </div>`;
+  });
+  panel.innerHTML = '';
+  panel.appendChild(grid);
+}
+
+// ── Renderização da AST ───────────────────────────────────────────────
+
+function renderAST(node) {
+  const pane = document.getElementById('tabAst');
+  if (!node) {
+    pane.innerHTML = '<div class="empty"><div class="empty-icon">🌳</div><p>Nenhuma árvore gerada.</p></div>';
+    return;
+  }
+  pane.innerHTML = '';
+  pane.appendChild(buildASTEl(node));
+}
+
+function buildASTEl(node) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ast-node';
+
+  const hasChildren = node.children && node.children.length > 0;
+  const line = document.createElement('div');
+  line.className = 'ast-node-line';
+  line.innerHTML = `
+    <span class="ast-toggle">${hasChildren ? '▾' : '·'}</span>
+    <span class="ast-type">${escHtml(node.type)}</span>
+    ${node.value !== undefined ? `<span class="ast-value">"${escHtml(String(node.value))}"</span>` : ''}
+  `;
+
+  wrap.appendChild(line);
+
+  if (hasChildren) {
+    const childrenEl = document.createElement('div');
+    childrenEl.className = 'ast-children';
+    node.children.forEach(child => {
+      if (typeof child === 'string') {
+        const leaf = document.createElement('div');
+        leaf.className = 'ast-node-line';
+        leaf.innerHTML = `<span class="ast-toggle">·</span><span class="ast-value">"${escHtml(child)}"</span>`;
+        childrenEl.appendChild(leaf);
+      } else {
+        childrenEl.appendChild(buildASTEl(child));
+      }
+    });
+    wrap.appendChild(childrenEl);
+
+    line.style.cursor = 'pointer';
+    line.addEventListener('click', () => {
+      const collapsed = childrenEl.classList.toggle('collapsed');
+      line.querySelector('.ast-toggle').textContent = collapsed ? '▸' : '▾';
+    });
+  }
+
+  return wrap;
+}
+
+// ── Renderização da Derivação ─────────────────────────────────────────
+
+function renderDerivation(steps) {
+  const pane = document.getElementById('tabDeriv');
+  if (!steps || !steps.length) {
+    pane.innerHTML = '<div class="empty"><p>Nenhum passo registrado.</p></div>';
+    return;
+  }
+  const ul = document.createElement('ul');
+  ul.className = 'derivation-list';
+  steps.forEach((step, i) => {
+    const li = document.createElement('li');
+    const parts = step.split('→');
+    let html = step;
+    if (parts.length === 2) {
+      const nt = escHtml(parts[0].trim());
+      const rest = escHtml(parts[1].trim());
+      html = `<span class="nt">${nt}</span> <span class="arr">→</span> <span class="term">${rest}</span>`;
+    }
+    li.innerHTML = `<span class="deriv-idx">${i+1}</span><span class="deriv-rule">${html}</span>`;
+    ul.appendChild(li);
+  });
+  pane.innerHTML = '';
+  pane.appendChild(ul);
+}
+
+// ── Renderização do Trace AFD ─────────────────────────────────────────
+
+function renderTrace(trace) {
+  const pane = document.getElementById('tabTrace');
+  if (!trace || !trace.length) {
+    pane.innerHTML = '<div class="empty" style="padding:32px"><p>Nenhum trace disponível.</p></div>';
+    return;
+  }
+  const ACCEPT = new Set(['ACCEPT_IDENT','ACCEPT_NUMBER','ACCEPT_FLOAT','ACCEPT_STRING',
+    'ACCEPT_DSTRING','ACCEPT_SINGLE','ACCEPT_NEQ','ACCEPT_LTE','ACCEPT_GTE']);
+
+  let html = `<table class="trace-table">
+    <thead><tr>
+      <th>#</th><th>Estado</th><th>Char</th><th>Classe</th><th>Buffer</th><th>Próximo</th>
+    </tr></thead><tbody>`;
+
+  trace.forEach((row, i) => {
+    const isAccept = ACCEPT.has(row.next_state);
+    const isErr    = row.next_state === 'ERROR';
+    const nextCls  = isAccept ? 'accept' : isErr ? 'error' : '';
+    html += `<tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td class="trace-state">${escHtml(row.state)}</td>
+      <td class="trace-char">${escHtml(row.char === '\x00' ? 'EOF' : row.char)}</td>
+      <td class="trace-class">${escHtml(row.char_class)}</td>
+      <td style="color:var(--muted)">${escHtml(row.buffer)}</td>
+      <td class="trace-next ${nextCls}">${escHtml(row.next_state)}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  pane.innerHTML = html;
+}
+
+// ── Análise principal ─────────────────────────────────────────────────
+
+async function analyze() {
+  const sql = document.getElementById('sqlInput').value.trim();
+  if (!sql) return;
+
+  const btn    = document.getElementById('btnAnalyze');
+  const btnTxt = document.getElementById('btnText');
+  const spn    = document.getElementById('spinner');
+  btn.disabled = true;
+  btnTxt.style.display = 'none';
+  spn.style.display    = 'inline-block';
+
+  const statusBar = document.getElementById('statusBar');
+  statusBar.className = 'status-bar';
+
+  try {
+    const res  = await fetch('/analyze', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sql})
+    });
+    const data = await res.json();
+
+    document.getElementById('resultsArea').style.display = 'block';
+    renderTokens(data.tokens || []);
+    renderAST(data.ast);
+    renderDerivation(data.derivation || []);
+    renderTrace(data.afd_trace || []);
+
+    if (data.valid) {
+      statusBar.className = 'status-bar success';
+      document.getElementById('statusIcon').textContent = '✓';
+      document.getElementById('statusMsg').textContent =
+        `Query válida — ${data.tokens.length} tokens reconhecidos, ${(data.derivation||[]).length} passos de derivação.`;
+    } else {
+      statusBar.className = 'status-bar error';
+      document.getElementById('statusIcon').textContent = '✗';
+      document.getElementById('statusMsg').textContent = data.error || 'Erro desconhecido.';
+    }
+
+  } catch (e) {
+    statusBar.className = 'status-bar error';
+    document.getElementById('statusIcon').textContent = '✗';
+    document.getElementById('statusMsg').textContent = 'Erro ao comunicar com o servidor.';
+  } finally {
+    btn.disabled = false;
+    btnTxt.style.display = 'inline';
+    spn.style.display    = 'none';
+  }
+}
+
+// ── Atalho Enter ──────────────────────────────────────────────────────
+
+document.getElementById('sqlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) analyze();
+});
+
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
