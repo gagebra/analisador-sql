@@ -6,6 +6,7 @@ Integra Lexer (AFD) + Parser (PDA) e expõe a API para o frontend.
 from flask import Flask, render_template, request, jsonify
 from lexer import tokenize, LexerError
 from parser import parse, ParseError
+import os
 
 app = Flask(__name__)
 
