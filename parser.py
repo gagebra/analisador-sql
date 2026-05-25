@@ -62,7 +62,43 @@ Cada consume() ↔ transição do PDA lendo um símbolo da entrada.
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Any
+import functools
 from lexer import Token
+
+# Não-terminais ↔ métodos do parser (pilha Γ do PDA simulado)
+_NT_METHODS = {
+    "parse": "S",
+    "parse_statement": "statement",
+    "parse_select": "select_stmt",
+    "parse_insert": "insert_stmt",
+    "parse_update": "update_stmt",
+    "parse_delete": "delete_stmt",
+    "parse_create": "create_stmt",
+    "parse_drop": "drop_stmt",
+    "parse_col_list": "col_list",
+    "parse_aliased_expr": "aliased_expr",
+    "parse_expr": "expr",
+    "parse_term": "term",
+    "parse_factor": "factor",
+    "parse_condition": "condition",
+    "parse_cond": "cond",
+    "parse_where": "where_clause",
+    "parse_group": "group_clause",
+    "parse_having": "having_clause",
+    "parse_order": "order_clause",
+    "parse_order_item": "order_item",
+    "parse_limit": "limit_clause",
+    "parse_join": "join_clause",
+    "parse_table_ref": "table_ref",
+    "parse_value_list": "value_list",
+    "parse_assignment_list": "assignment_list",
+    "parse_assignment": "assignment",
+    "parse_col_def_list": "col_def_list",
+    "parse_col_def": "col_def",
+    "parse_type_def": "type_def",
+    "parse_col_constraints": "col_constraints",
+    "parse_table_constraint": "table_constraint",
+}
 
 
 # ─────────────────────────────────────────────
@@ -87,10 +123,11 @@ class ASTNode:
 
 
 class ParseError(Exception):
-    def __init__(self, message: str, token: Token):
+    def __init__(self, message: str, token: Token, pda_trace: Optional[List[dict]] = None):
         super().__init__(message)
         self.token = token
         self.position = token.position
+        self.pda_trace = pda_trace or []
 
 
 # ─────────────────────────────────────────────
@@ -110,7 +147,37 @@ class Parser:
         self.tokens = [t for t in tokens if t.type != 'EOF'] + \
                       [t for t in tokens if t.type == 'EOF']
         self.pos = 0
-        self.derivation: List[str] = []   # passos de derivação (para documentação)
+        self.derivation: List[str] = []
+        self.pda_stack: List[str] = ["$"]
+        self.pda_trace: List[dict] = []
+
+    # ── Simulação explícita da pilha Γ (PDA) ────
+
+    def _token_snapshot(self) -> Optional[dict]:
+        if self.pos >= len(self.tokens):
+            return None
+        t = self.tokens[self.pos]
+        return {"type": t.type, "value": t.value, "position": t.position}
+
+    def _record_pda(self, action: str, symbol: str = "", rule: str = ""):
+        self.pda_trace.append({
+            "action": action,
+            "symbol": symbol,
+            "rule": rule,
+            "stack": list(self.pda_stack),
+            "token_index": self.pos,
+            "current_token": self._token_snapshot(),
+            "active_nt": self.pda_stack[-1] if len(self.pda_stack) > 1 else None,
+        })
+
+    def _pda_push(self, nt: str):
+        self.pda_stack.append(nt)
+        self._record_pda("push", symbol=nt)
+
+    def _pda_pop(self, nt: str):
+        if self.pda_stack and self.pda_stack[-1] == nt:
+            self.pda_stack.pop()
+        self._record_pda("pop", symbol=nt)
 
     # ── Utilitários do PDA ──────────────────────
 
@@ -125,19 +192,23 @@ class Parser:
         return self._current().type in types
 
     def consume(self, *expected_types) -> Token:
-        """Lê um token da entrada (transição do PDA)."""
+        """Lê um token da entrada (transição do PDA — deslocamento na fita Σ)."""
         tok = self._current()
         if expected_types and tok.type not in expected_types:
             exp = " ou ".join(expected_types)
             raise ParseError(
                 f"Esperado {exp}, encontrado '{tok.value}' ({tok.type})",
-                tok
+                tok,
+                list(self.pda_trace),
             )
+        self._record_pda("shift", symbol=tok.type, rule=tok.value)
         self.pos += 1
         return tok
 
     def _log(self, rule: str):
         self.derivation.append(rule)
+        lhs = rule.split("→")[0].strip() if "→" in rule else rule
+        self._record_pda("derive", symbol=lhs, rule=rule)
 
     # ── Ponto de entrada ────────────────────────
 
@@ -148,7 +219,8 @@ class Parser:
             tok = self._current()
             raise ParseError(
                 f"Token inesperado '{tok.value}' após fim da instrução",
-                tok
+                tok,
+                list(self.pda_trace),
             )
         return node
 
@@ -162,7 +234,8 @@ class Parser:
         if t == 'DROP':   return self.parse_drop()
         raise ParseError(
             f"Instrução SQL desconhecida: '{self._current().value}'",
-            self._current()
+            self._current(),
+            list(self.pda_trace),
         )
 
     # ── SELECT ──────────────────────────────────
@@ -373,7 +446,8 @@ class Parser:
 
         raise ParseError(
             f"Expressão inesperada: '{tok.value}' ({tok.type})",
-            tok
+            tok,
+            list(self.pda_trace),
         )
 
     # ── Condições ───────────────────────────────
@@ -448,7 +522,8 @@ class Parser:
 
         raise ParseError(
             f"Condição inválida próximo a '{self._current().value}'",
-            self._current()
+            self._current(),
+            list(self.pda_trace),
         )
 
     # ── Cláusulas ───────────────────────────────
@@ -625,11 +700,37 @@ class Parser:
             ref_col = self.consume('IDENTIFIER').value
             self.consume('RPAREN')
             return ASTNode("FOREIGN_KEY", value=f"{col} → {ref_table}.{ref_col}")
-        raise ParseError("Restrição de tabela inválida", self._current())
+        raise ParseError(
+            "Restrição de tabela inválida",
+            self._current(),
+            list(self.pda_trace),
+        )
+
+
+def _apply_pda_wrappers():
+    for method_name, nt in _NT_METHODS.items():
+        if not hasattr(Parser, method_name):
+            continue
+        original = getattr(Parser, method_name)
+
+        @functools.wraps(original)
+        def make_wrapper(orig, nt_name):
+            def wrapper(self, *args, **kwargs):
+                self._pda_push(nt_name)
+                try:
+                    return orig(self, *args, **kwargs)
+                finally:
+                    self._pda_pop(nt_name)
+            return wrapper
+
+        setattr(Parser, method_name, make_wrapper(original, nt))
+
+
+_apply_pda_wrappers()
 
 
 def parse(tokens) -> tuple:
-    """Ponto de entrada público. Retorna (ASTNode, derivation_steps)."""
+    """Ponto de entrada público. Retorna (AST, derivação, trace PDA)."""
     p = Parser(tokens)
     ast = p.parse()
-    return ast, p.derivation
+    return ast, p.derivation, p.pda_trace

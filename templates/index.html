@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Analisador SQL — Linguagens Formais e Autômatos</title>
+<title>Analisador SQL</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <style>
   :root {
@@ -339,6 +339,150 @@
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
+
+  /* ── Simulador de autômatos ── */
+  .viz-area {
+    margin-top: 24px;
+    margin-bottom: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .viz-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, rgba(79,142,247,.08), rgba(124,58,237,.06));
+  }
+  .viz-header h2 {
+    font-size: .95rem; font-weight: 800; letter-spacing: -.02em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .viz-phase-tabs { display: flex; gap: 6px; }
+  .viz-phase-btn {
+    font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border-bright);
+    background: transparent; color: var(--muted); cursor: pointer; transition: all .15s;
+  }
+  .viz-phase-btn.active {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(79,142,247,.1);
+  }
+  .viz-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+  }
+  .viz-btn {
+    width: 36px; height: 36px; border-radius: 8px;
+    border: 1px solid var(--border-bright); background: rgba(255,255,255,.03);
+    color: var(--text); cursor: pointer; font-size: .9rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+  .viz-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .viz-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: auto; padding: 0 14px; font-weight: 700; font-size: .78rem; }
+  .viz-slider { flex: 1; min-width: 120px; accent-color: var(--accent); }
+  .viz-step-label {
+    font-family: 'JetBrains Mono', monospace; font-size: .72rem; color: var(--muted);
+    min-width: 90px; text-align: right;
+  }
+  .viz-grid {
+    display: grid; grid-template-columns: 1.2fr 1fr; gap: 0;
+  }
+  @media (max-width: 1000px) { .viz-grid { grid-template-columns: 1fr; } }
+  .viz-col {
+    padding: 16px 18px;
+    border-right: 1px solid var(--border);
+  }
+  .viz-col:last-child { border-right: none; }
+  @media (max-width: 1000px) {
+    .viz-col { border-right: none; border-bottom: 1px solid var(--border); }
+    .viz-col:last-child { border-bottom: none; }
+  }
+  .viz-col-title {
+    font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .viz-col-title span { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: .7rem; letter-spacing: 0; text-transform: none; }
+  .afd-svg-wrap {
+    width: 100%; overflow: auto;
+    background: rgba(0,0,0,.25); border-radius: 10px;
+    border: 1px solid var(--border);
+    min-height: 280px;
+  }
+  .afd-svg-wrap svg { display: block; min-width: 620px; }
+  .afd-node circle { fill: #1a1f2e; stroke: #2a3048; stroke-width: 2; transition: all .2s; }
+  .afd-node text { fill: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; }
+  .afd-node.current circle { fill: rgba(251,191,36,.2); stroke: var(--yellow); stroke-width: 3; }
+  .afd-node.current text { fill: var(--yellow); font-weight: 700; }
+  .afd-node.next circle { fill: rgba(34,211,160,.15); stroke: var(--green); stroke-width: 3; }
+  .afd-node.next text { fill: var(--green); }
+  .afd-node.accept circle { stroke-dasharray: 4 2; }
+  .afd-node.start circle { stroke: var(--accent); }
+  .afd-edge { fill: none; stroke: #2a3048; stroke-width: 1.2; opacity: .35; transition: all .2s; }
+  .afd-edge.active { stroke: var(--accent); stroke-width: 2.5; opacity: 1; }
+  .afd-edge-label { fill: var(--muted); font-size: 7px; font-family: 'JetBrains Mono', monospace; opacity: .5; }
+  .afd-edge-label.active { fill: var(--accent); opacity: 1; font-weight: 700; }
+  .sql-tape {
+    font-family: 'JetBrains Mono', monospace; font-size: .82rem; line-height: 1.9;
+    padding: 12px 14px; background: rgba(0,0,0,.3); border-radius: 8px;
+    border: 1px solid var(--border); margin-top: 12px;
+    word-break: break-all; max-height: 80px; overflow-y: auto;
+  }
+  .sql-tape .ch { display: inline; padding: 1px 0; border-radius: 2px; transition: background .1s; }
+  .sql-tape .ch.active { background: rgba(251,191,36,.35); color: var(--yellow); }
+  .sql-tape .ch.ws { opacity: .35; }
+  .viz-legend {
+    display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px;
+    font-size: .68rem; color: var(--muted);
+  }
+  .viz-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .pda-stack-wrap {
+    min-height: 200px; display: flex; flex-direction: column-reverse; align-items: stretch;
+    gap: 6px; padding: 12px; background: rgba(0,0,0,.25);
+    border-radius: 10px; border: 1px solid var(--border);
+  }
+  .pda-stack-item {
+    font-family: 'JetBrains Mono', monospace; font-size: .78rem;
+    padding: 8px 12px; border-radius: 6px;
+    border: 1px solid var(--border-bright);
+    background: rgba(255,255,255,.03);
+    display: flex; align-items: center; justify-content: space-between;
+    animation: stackIn .25s ease;
+  }
+  @keyframes stackIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+  .pda-stack-item.top { border-color: var(--accent2); background: rgba(124,58,237,.15); color: #c4b5fd; }
+  .pda-stack-item.bottom { border-color: var(--muted); opacity: .7; }
+  .pda-stack-item.push { border-color: var(--green); box-shadow: 0 0 12px rgba(34,211,160,.15); }
+  .pda-stack-item.pop { border-color: var(--red); opacity: .6; }
+  .pda-action-badge {
+    font-size: .62rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .pda-action-badge.push { background: rgba(34,211,160,.2); color: var(--green); }
+  .pda-action-badge.pop { background: rgba(244,63,94,.2); color: var(--red); }
+  .pda-action-badge.shift { background: rgba(79,142,247,.2); color: var(--accent); }
+  .pda-action-badge.derive { background: rgba(124,58,237,.2); color: #c4b5fd; }
+  .pda-info {
+    margin-top: 12px; display: grid; gap: 8px;
+  }
+  .pda-info-row {
+    padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: rgba(255,255,255,.02);
+    font-family: 'JetBrains Mono', monospace; font-size: .74rem;
+  }
+  .pda-info-row label { display: block; font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; font-family: 'Syne', sans-serif; }
+  .pda-info-row .val { color: var(--text); }
+  .pda-info-row .val.hl { color: var(--yellow); }
+  .pda-info-row .val.nt { color: var(--accent2); font-weight: 700; }
+  .tokens-panel-viz .token-chip { transition: transform .15s, box-shadow .15s; }
+  .tokens-panel-viz .token-chip.active {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 2px var(--yellow), 0 4px 12px rgba(251,191,36,.25);
+  }
 </style>
 </head>
 <body>
@@ -432,6 +576,62 @@ Ex: SELECT * FROM usuarios WHERE idade > 18;"></textarea>
       </div>
 
     </div>
+
+    <!-- Simulador AFD + PDA (abaixo dos resultados) -->
+    <div class="viz-area" id="vizArea" style="display:none">
+      <div class="viz-header">
+        <h2>⚡ Simulador de Autômatos</h2>
+        <div class="viz-phase-tabs">
+          <button type="button" class="viz-phase-btn active" data-phase="lex" onclick="setVizPhase('lex')">① Léxico — AFD</button>
+          <button type="button" class="viz-phase-btn" data-phase="syn" onclick="setVizPhase('syn')">② Sintático — PDA</button>
+        </div>
+      </div>
+      <div class="viz-controls">
+        <button type="button" class="viz-btn" id="btnVizFirst" title="Início">⏮</button>
+        <button type="button" class="viz-btn" id="btnVizPrev" title="Anterior">◀</button>
+        <button type="button" class="viz-btn primary" id="btnVizPlay" title="Play/Pause">▶ Play</button>
+        <button type="button" class="viz-btn" id="btnVizNext" title="Próximo">▶</button>
+        <button type="button" class="viz-btn" id="btnVizLast" title="Fim">⏭</button>
+        <input type="range" class="viz-slider" id="vizSlider" min="0" max="0" value="0"/>
+        <span class="viz-step-label" id="vizStepLabel">0 / 0</span>
+      </div>
+      <div class="viz-grid">
+        <div class="viz-col" id="vizColAfd">
+          <div class="viz-col-title">Autômato Finito Determinístico <span id="afdStepInfo">δ(q, a)</span></div>
+          <div class="afd-svg-wrap" id="afdSvgWrap"></div>
+          <div class="viz-legend">
+            <span><i style="background:var(--yellow)"></i> Estado atual q</span>
+            <span><i style="background:var(--green)"></i> Próximo estado δ(q,a)</span>
+            <span><i style="background:var(--accent)"></i> Aresta ativa</span>
+          </div>
+          <div class="sql-tape" id="sqlTape"></div>
+        </div>
+        <div class="viz-col" id="vizColPda">
+          <div class="viz-col-title">Autômato com Pilha (PDA) — Pilha Γ <span id="pdaStepInfo"></span></div>
+          <div class="pda-stack-wrap" id="pdaStack"></div>
+          <div class="pda-info">
+            <div class="pda-info-row">
+              <label>Ação δ</label>
+              <div class="val" id="pdaAction">—</div>
+            </div>
+            <div class="pda-info-row">
+              <label>Não-terminal / símbolo</label>
+              <div class="val nt" id="pdaSymbol">—</div>
+            </div>
+            <div class="pda-info-row">
+              <label>Token atual (fita de entrada Σ)</label>
+              <div class="val hl" id="pdaToken">—</div>
+            </div>
+            <div class="pda-info-row">
+              <label>Regra GLC aplicada</label>
+              <div class="val" id="pdaRule">—</div>
+            </div>
+          </div>
+          <div class="viz-col-title" style="margin-top:14px">Tokens <span id="vizTokenIdx"></span></div>
+          <div class="tokens-panel-viz" id="tokensViz" style="display:flex;flex-wrap:wrap;gap:6px;max-height:100px;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -447,6 +647,9 @@ function clearAll() {
   document.getElementById('sqlInput').value = '';
   document.getElementById('statusBar').className = 'status-bar';
   document.getElementById('resultsArea').style.display = 'none';
+  document.getElementById('vizArea').style.display = 'none';
+  stopVizPlay();
+  vizState = null;
 }
 
 function switchTab(el, pane) {
@@ -617,6 +820,290 @@ function renderTrace(trace) {
   pane.innerHTML = html;
 }
 
+// ── Simulador AFD / PDA ───────────────────────────────────────────────
+
+let vizState = null;
+let vizPlayTimer = null;
+
+function initViz(data) {
+  vizState = {
+    sql: data.sql || '',
+    afdTrace: data.afd_trace || [],
+    afdGraph: data.afd_graph || { nodes: [], edges: [] },
+    pdaTrace: data.pda_trace || [],
+    tokens: data.tokens || [],
+    phase: 'lex',
+    step: 0,
+  };
+  document.getElementById('vizArea').style.display = 'block';
+  buildAfdSvg(vizState.afdGraph);
+  buildSqlTape(vizState.sql);
+  renderTokensViz(vizState.tokens);
+  setVizPhase('lex');
+  if (vizState.afdTrace.length) setVizStep(0);
+  else if (vizState.pdaTrace.length) setVizPhase('syn');
+}
+
+function setVizPhase(phase) {
+  if (!vizState) return;
+  vizState.phase = phase;
+  vizState.step = 0;
+  document.querySelectorAll('.viz-phase-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.phase === phase);
+  });
+  document.getElementById('vizColAfd').style.opacity = phase === 'lex' ? '1' : '.45';
+  document.getElementById('vizColPda').style.opacity = phase === 'syn' ? '1' : '.45';
+  const max = phase === 'lex' ? vizState.afdTrace.length - 1 : vizState.pdaTrace.length - 1;
+  const slider = document.getElementById('vizSlider');
+  slider.max = Math.max(0, max);
+  slider.value = 0;
+  updateVizDisplay();
+}
+
+function getVizMaxStep() {
+  if (!vizState) return 0;
+  return vizState.phase === 'lex'
+    ? Math.max(0, vizState.afdTrace.length - 1)
+    : Math.max(0, vizState.pdaTrace.length - 1);
+}
+
+function setVizStep(n) {
+  if (!vizState) return;
+  const max = getVizMaxStep();
+  vizState.step = Math.max(0, Math.min(n, max));
+  document.getElementById('vizSlider').value = vizState.step;
+  updateVizDisplay();
+}
+
+function updateVizDisplay() {
+  if (!vizState) return;
+  const max = getVizMaxStep();
+  const total = vizState.phase === 'lex' ? vizState.afdTrace.length : vizState.pdaTrace.length;
+  document.getElementById('vizStepLabel').textContent =
+    `${vizState.step + 1} / ${total || 0}`;
+
+  if (vizState.phase === 'lex') {
+    renderAfdStep(vizState.afdTrace[vizState.step]);
+    highlightSqlPos(vizState.afdTrace[vizState.step]?.pos ?? -1);
+    clearPdaHighlight();
+    if (vizState.step === 0) renderPdaStack(['$']);
+    document.getElementById('afdStepInfo').textContent =
+      vizState.afdTrace[vizState.step]
+        ? `δ(${vizState.afdTrace[vizState.step].state}, ${vizState.afdTrace[vizState.step].char_class})`
+        : '—';
+    document.getElementById('pdaStepInfo').textContent = '(fase léxica)';
+  } else {
+    const step = vizState.pdaTrace[vizState.step];
+    renderPdaStep(step);
+    highlightSqlPos(step?.current_token?.position ?? -1);
+    highlightTokenChip(step?.token_index ?? -1);
+    clearAfdHighlight();
+    document.getElementById('pdaStepInfo').textContent =
+      step ? `passo ${vizState.step + 1}` : '—';
+    document.getElementById('afdStepInfo').textContent = '(fase sintática)';
+  }
+}
+
+function buildAfdSvg(graph) {
+  const wrap = document.getElementById('afdSvgWrap');
+  const nodes = graph.nodes || [];
+  const edges = graph.edges || [];
+  let maxX = 600, maxY = 540;
+  nodes.forEach(n => { maxX = Math.max(maxX, n.x + 80); maxY = Math.max(maxY, n.y + 60); });
+
+  let svg = `<svg viewBox="0 0 ${maxX} ${maxY}" xmlns="http://www.w3.org/2000/svg" id="afdSvg">`;
+  svg += '<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#4f8ef7"/></marker></defs>';
+
+  edges.forEach((e, i) => {
+    const from = nodes.find(n => n.id === e.from);
+    const to = nodes.find(n => n.id === e.to);
+    if (!from || !to) return;
+    const mx = (from.x + to.x) / 2 + 28;
+    const my = (from.y + to.y) / 2 + 14;
+    svg += `<line class="afd-edge" id="edge-${i}" data-from="${e.from}" data-to="${e.to}" data-label="${e.label}"
+      x1="${from.x + 28}" y1="${from.y + 14}" x2="${to.x + 28}" y2="${to.y + 14}" marker-end="url(#arrow)"/>`;
+    svg += `<text class="afd-edge-label" id="edge-label-${i}" x="${mx}" y="${my}" data-from="${e.from}" data-to="${e.to}">${escHtml(e.label)}</text>`;
+  });
+
+  nodes.forEach(n => {
+    const cls = [
+      'afd-node',
+      n.is_start ? 'start' : '',
+      n.is_accept ? 'accept' : '',
+      n.is_error ? 'error' : '',
+    ].filter(Boolean).join(' ');
+    svg += `<g class="${cls}" id="node-${n.id}" data-state="${n.id}" transform="translate(${n.x},${n.y})">`;
+    svg += `<circle r="22" cx="28" cy="14"/>`;
+    if (n.is_accept) svg += `<circle r="26" cx="28" cy="14" fill="none" stroke="#22d3a0" stroke-width="1" opacity=".5"/>`;
+    svg += `<text x="28" y="18">${escHtml(n.id.replace('ACCEPT_', 'A_').replace('IN_', ''))}</text>`;
+    svg += '</g>';
+  });
+
+  svg += '</svg>';
+  wrap.innerHTML = svg;
+}
+
+function renderAfdStep(step) {
+  clearAfdHighlight();
+  if (!step) return;
+  const cur = document.getElementById(`node-${step.state}`);
+  const nxt = document.getElementById(`node-${step.next_state}`);
+  if (cur) cur.classList.add('current');
+  if (nxt) nxt.classList.add('next');
+
+  document.querySelectorAll('.afd-edge').forEach(line => {
+    if (line.dataset.from === step.state && line.dataset.to === step.next_state
+        && line.dataset.label === step.char_class) {
+      line.classList.add('active');
+    }
+  });
+  document.querySelectorAll('.afd-edge-label').forEach(lbl => {
+    if (lbl.dataset.from === step.state && lbl.dataset.to === step.next_state
+        && lbl.textContent === step.char_class) {
+      lbl.classList.add('active');
+    }
+  });
+}
+
+function clearAfdHighlight() {
+  document.querySelectorAll('.afd-node').forEach(n => n.classList.remove('current', 'next'));
+  document.querySelectorAll('.afd-edge, .afd-edge-label').forEach(e => e.classList.remove('active'));
+}
+
+function buildSqlTape(sql) {
+  const tape = document.getElementById('sqlTape');
+  tape.innerHTML = '';
+  for (let i = 0; i < sql.length; i++) {
+    const span = document.createElement('span');
+    span.className = 'ch' + (/\s/.test(sql[i]) ? ' ws' : '');
+    span.dataset.pos = i;
+    span.textContent = sql[i];
+    tape.appendChild(span);
+  }
+}
+
+function highlightSqlPos(pos) {
+  document.querySelectorAll('.sql-tape .ch').forEach(ch => {
+    ch.classList.toggle('active', parseInt(ch.dataset.pos, 10) === pos);
+  });
+  const active = document.querySelector('.sql-tape .ch.active');
+  if (active) active.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+
+function renderPdaStep(step) {
+  if (!step) {
+    renderPdaStack(['$']);
+    return;
+  }
+  renderPdaStack(step.stack || ['$']);
+
+  const actionEl = document.getElementById('pdaAction');
+  const symEl = document.getElementById('pdaSymbol');
+  const tokEl = document.getElementById('pdaToken');
+  const ruleEl = document.getElementById('pdaRule');
+
+  const badges = { push: 'Empilhar Γ', pop: 'Desempilhar Γ', shift: 'Deslocar (ler token)', derive: 'Derivar GLC' };
+  actionEl.innerHTML = `<span class="pda-action-badge ${step.action}">${badges[step.action] || step.action}</span> ${escHtml(step.symbol || '')}`;
+
+  symEl.textContent = step.active_nt
+    ? `<${step.active_nt}>`
+    : (step.symbol || '—');
+
+  const tok = step.current_token;
+  tokEl.textContent = tok
+    ? `${tok.type}  «${tok.value}»  @${tok.position}`
+    : '(fim da entrada)';
+
+  ruleEl.textContent = step.rule || (step.action === 'derive' ? '—' : '—');
+  if (step.action === 'derive' && step.rule) {
+    ruleEl.innerHTML = step.rule.split('→').map((p, i) =>
+      i === 0 ? `<span style="color:var(--accent2)">${escHtml(p.trim())}</span>` : ` → <span style="color:var(--green)">${escHtml(p.trim())}</span>`
+    ).join('');
+  }
+
+  document.getElementById('pdaStepInfo').textContent =
+    `${step.action.toUpperCase()} · pilha: [${(step.stack || []).join(', ')}]`;
+}
+
+function renderPdaStack(stack) {
+  const wrap = document.getElementById('pdaStack');
+  wrap.innerHTML = '';
+  if (!stack || !stack.length) {
+    wrap.innerHTML = '<div class="pda-stack-item bottom"><span>$</span></div>';
+    return;
+  }
+  stack.forEach((sym, i) => {
+    const div = document.createElement('div');
+    const isTop = i === stack.length - 1;
+    const isBottom = i === 0;
+    div.className = 'pda-stack-item' + (isTop ? ' top' : '') + (isBottom ? ' bottom' : '');
+    div.innerHTML = `<span>${escHtml(sym)}</span>${isTop && sym !== '$' ? '<span style="color:var(--muted);font-size:.65rem">← topo</span>' : ''}`;
+    wrap.appendChild(div);
+  });
+}
+
+function clearPdaHighlight() {
+  document.getElementById('pdaAction').textContent = '—';
+  document.getElementById('pdaSymbol').textContent = '—';
+  document.getElementById('pdaToken').textContent = '—';
+  document.getElementById('pdaRule').textContent = '—';
+}
+
+function renderTokensViz(tokens) {
+  const el = document.getElementById('tokensViz');
+  el.innerHTML = '';
+  tokens.forEach((tok, i) => {
+    const cls = tokenClass(tok.type);
+    const chip = document.createElement('div');
+    chip.className = `token-chip ${cls}`;
+    chip.dataset.index = i;
+    chip.title = `pos=${tok.position}`;
+    chip.innerHTML = `<span class="token-type">${tok.type}</span><span class="token-value">${escHtml(tok.value)}</span>`;
+    el.appendChild(chip);
+  });
+}
+
+function highlightTokenChip(index) {
+  document.querySelectorAll('#tokensViz .token-chip').forEach((c, i) => {
+    c.classList.toggle('active', i === index);
+  });
+  const active = document.querySelector('#tokensViz .token-chip.active');
+  if (active) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+function stopVizPlay() {
+  if (vizPlayTimer) { clearInterval(vizPlayTimer); vizPlayTimer = null; }
+  document.getElementById('btnVizPlay').textContent = '▶ Play';
+}
+
+function toggleVizPlay() {
+  if (vizPlayTimer) { stopVizPlay(); return; }
+  document.getElementById('btnVizPlay').textContent = '⏸ Pause';
+  vizPlayTimer = setInterval(() => {
+    if (!vizState) { stopVizPlay(); return; }
+    const max = getVizMaxStep();
+    if (vizState.step >= max) {
+      if (vizState.phase === 'lex' && vizState.pdaTrace.length) {
+        setVizPhase('syn');
+        return;
+      }
+      stopVizPlay();
+      return;
+    }
+    setVizStep(vizState.step + 1);
+  }, 450);
+}
+
+document.getElementById('btnVizFirst').onclick = () => { stopVizPlay(); setVizStep(0); };
+document.getElementById('btnVizPrev').onclick  = () => { stopVizPlay(); setVizStep(vizState.step - 1); };
+document.getElementById('btnVizNext').onclick  = () => { stopVizPlay(); setVizStep(vizState.step + 1); };
+document.getElementById('btnVizLast').onclick  = () => { stopVizPlay(); setVizStep(getVizMaxStep()); };
+document.getElementById('btnVizPlay').onclick  = toggleVizPlay;
+document.getElementById('vizSlider').oninput = function() {
+  stopVizPlay();
+  setVizStep(parseInt(this.value, 10));
+};
+
 // ── Análise principal ─────────────────────────────────────────────────
 
 async function analyze() {
@@ -646,6 +1133,16 @@ async function analyze() {
     renderAST(data.ast);
     renderDerivation(data.derivation || []);
     renderTrace(data.afd_trace || []);
+
+    if (data.afd_trace?.length || data.pda_trace?.length) {
+      initViz(data);
+    } else {
+      document.getElementById('vizArea').style.display = 'none';
+    }
+
+    if (data.error_position != null && data.sql) {
+      highlightSqlPos(data.error_position);
+    }
 
     if (data.valid) {
       statusBar.className = 'status-bar success';
