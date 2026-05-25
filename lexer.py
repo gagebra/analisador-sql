@@ -8,7 +8,7 @@ diretamente a definição formal: M = (Q, Σ, δ, q0, F)
 
 import re
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 # ─────────────────────────────────────────────
 # Tipos de tokens reconhecidos pelo AFD
@@ -178,9 +178,10 @@ TRANSITION_TABLE = {
 
 
 class LexerError(Exception):
-    def __init__(self, message: str, position: int):
+    def __init__(self, message: str, position: int, trace: Optional[list] = None):
         super().__init__(message)
         self.position = position
+        self.trace = trace or []
 
 
 class Lexer:
@@ -243,6 +244,7 @@ class Lexer:
                 'char_class': cc,
                 'next_state': next_state,
                 'buffer': buf,
+                'pos': min(self.pos, len(self.source)),
             })
 
             # ── Estados de aceitação ──
@@ -265,7 +267,8 @@ class Lexer:
                     break
                 raise LexerError(
                     f"Caractere inesperado '{ch}' na posição {self.pos}",
-                    self.pos
+                    self.pos,
+                    list(self.trace),
                 )
 
             else:
@@ -316,5 +319,9 @@ class Lexer:
 def tokenize(sql: str) -> Tuple[List[Token], List[dict]]:
     """Ponto de entrada público."""
     lexer = Lexer(sql)
-    tokens = lexer.tokenize()
-    return tokens, lexer.trace
+    try:
+        tokens = lexer.tokenize()
+        return tokens, lexer.trace
+    except LexerError as e:
+        e.trace = e.trace or list(lexer.trace)
+        raise
