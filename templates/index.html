@@ -982,12 +982,30 @@ function buildSqlTape(sql) {
   }
 }
 
+/** Rola apenas dentro do container — não move o scroll da página. */
+function scrollInContainer(container, el) {
+  if (!container || !el) return;
+  const cr = container.getBoundingClientRect();
+  const er = el.getBoundingClientRect();
+  if (er.left < cr.left) {
+    container.scrollLeft -= cr.left - er.left + 8;
+  } else if (er.right > cr.right) {
+    container.scrollLeft += er.right - cr.right + 8;
+  }
+  if (er.top < cr.top) {
+    container.scrollTop -= cr.top - er.top + 4;
+  } else if (er.bottom > cr.bottom) {
+    container.scrollTop += er.bottom - cr.bottom + 4;
+  }
+}
+
 function highlightSqlPos(pos) {
   document.querySelectorAll('.sql-tape .ch').forEach(ch => {
     ch.classList.toggle('active', parseInt(ch.dataset.pos, 10) === pos);
   });
-  const active = document.querySelector('.sql-tape .ch.active');
-  if (active) active.scrollIntoView({ block: 'nearest', inline: 'center' });
+  const tape = document.getElementById('sqlTape');
+  const active = tape?.querySelector('.ch.active');
+  if (active && tape) scrollInContainer(tape, active);
 }
 
 function renderPdaStep(step) {
@@ -1064,11 +1082,13 @@ function renderTokensViz(tokens) {
 }
 
 function highlightTokenChip(index) {
-  document.querySelectorAll('#tokensViz .token-chip').forEach((c, i) => {
+  const panel = document.getElementById('tokensViz');
+  if (!panel) return;
+  panel.querySelectorAll('.token-chip').forEach((c, i) => {
     c.classList.toggle('active', i === index);
   });
-  const active = document.querySelector('#tokensViz .token-chip.active');
-  if (active) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const active = panel.querySelector('.token-chip.active');
+  if (active) scrollInContainer(panel, active);
 }
 
 function stopVizPlay() {
